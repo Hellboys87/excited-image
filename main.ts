@@ -190,8 +190,8 @@ function beam(
       if (t < 0 || t > 1) continue;
       const perp = Math.abs(px * uy - py * ux);
       const wdt = lerp(w0, w1, t);
-      const across = sstep(wdt, wdt * 0.3, perp);
-      const along = Math.pow(1 - t, 1.5);
+      const across = sstep(wdt, wdt * 0.08, perp);
+      const along = Math.pow(1 - t, 2.0);
       const f = across * along * s;
       if (f > 0.003) addTo(img, x, y, r * f, g * f, b * f);
     }
@@ -199,16 +199,16 @@ function beam(
 }
 
 function paintBeams(): void {
-  beam(140, 952, 470, 330, 5, 46, 1.0, 0.84, 0.52, 0.1);
-  beam(892, 958, 655, 345, 5, 40, 0.62, 0.86, 1.05, 0.09);
-  beam(520, 962, 575, 420, 4, 30, 0.7, 0.8, 1.05, 0.055);
+  beam(140, 952, 470, 330, 7, 48, 1.0, 0.84, 0.52, 0.07);
+  beam(892, 958, 655, 345, 7, 42, 0.62, 0.86, 1.05, 0.062);
+  beam(520, 962, 575, 420, 6, 32, 0.7, 0.8, 1.05, 0.04);
 }
 
 // --------------------------------------------------------------- jellyfish
 
-const BCX = 580; // bell centre
-const BCY = 326;
-const BR = 238; // bell radius
+const BCX = 578; // bell centre
+const BCY = 316;
+const BR = 226; // bell radius
 
 // The bell's lower rim, in squashed bell units: a gentle wave.
 function rimV(u: number): number {
@@ -226,9 +226,9 @@ function bellMask(uu: number, vv: number): number {
 }
 
 function paintBellHalo(): void {
-  stamp(glow, BCX, BCY, BR * 1.6, 0.3, 0.52, 0.95, 0.5);
-  stamp(glow, BCX, BCY - 20, BR * 1.12, 0.42, 0.3, 0.9, 0.5);
-  stamp(glow, BCX, BCY + 30, BR * 0.95, 0.1, 0.65, 0.8, 0.3);
+  stamp(glow, BCX, BCY, BR * 1.6, 0.3, 0.52, 0.95, 0.3);
+  stamp(glow, BCX, BCY - 20, BR * 1.12, 0.42, 0.3, 0.9, 0.15);
+  stamp(glow, BCX, BCY + 30, BR * 0.95, 0.1, 0.65, 0.8, 0.18);
 }
 
 function paintGalaxy(): void {
@@ -245,33 +245,57 @@ function paintGalaxy(): void {
       const r = Math.sqrt(uu * uu + vv * vv);
       const ang = Math.atan2(vv, uu);
 
-      // Spiral galaxy: two arms winding outward, a diffuse disc, a hot core.
-      let arm = 0.5 + 0.5 * Math.sin(2 * ang + 7.2 * r - 0.6);
-      arm = Math.pow(arm, 2.8);
-      const dust = 0.72 + 0.28 * Math.sin(3 * ang + 12.5 * r + 1.7);
-      const disc = Math.exp(-r * 2.7);
-      const bright = (arm * 1.55 * (1 - r * 0.72) + disc * 0.5) * dust;
-      const core = Math.exp(-r * r * 11) * 2.3;
+      // The galaxy, in its own inclined disc space: squashed, tilted and
+      // shrunk so the whole S of the spiral fits inside the bell. Two thin
+      // arms wrap a warm bar and nucleus; a fainter, bluer second arm
+      // system winds between them; dark lanes keep the contrast.
+      const gu = uu * 1.32;
+      const gv = (vv / 0.78) * 1.32;
+      const gr = Math.sqrt(gu * gu + gv * gv);
+      const gang = Math.atan2(gv, gu) - 0.6;
+      let arm = 0.5 + 0.5 * Math.sin(2 * gang + 13 * gr);
+      arm = Math.pow(arm, 7);
+      let arm2 = 0.5 + 0.5 * Math.sin(2 * gang + 16 * gr + 2.1);
+      arm2 = Math.pow(arm2, 6) * 0.4;
+      const dust = 0.7 + 0.3 * Math.sin(3 * gang + 13 * gr + 1.7);
+      const grain = 0.85 + 0.3 * Math.sin(4 * gang + 15 * gr + 2.2);
+      // Star-forming knots clumped along the arms, so they read as chains
+      // of bright clusters rather than smooth ribbons.
+      const knots = 0.78 + 0.5 * Math.pow(0.5 + 0.5 * Math.sin(9 * gang + 26 * gr + 4.0), 3);
+      const gfade = 1 - sstep(0.82, 1.02, gr);
+      const disc = Math.exp(-gr * 2.9);
+      const bright = arm * 2.9 * (1 - gr * 0.45) * dust * grain * knots * gfade;
+      const bright2 = arm2 * 1.2 * (1 - gr * 0.4) * dust * gfade;
+      const core = Math.exp(-gr * gr * 18) * 0.9;
+      const bar =
+        Math.exp(-Math.pow(gv * 3.4, 2)) * Math.exp(-Math.pow(gu * 1.5, 2)) * 0.5;
+      const fringe = arm * sstep(0.45, 0.9, gr) * gfade * dust;
 
-      // Palette: violet body, magenta arms, cyan fringe, gold-white core.
-      let cr = 0.34 * disc + 1.02 * arm * (1 - r) + 0.22 * r * arm;
-      let cg = 0.18 * disc + 0.3 * arm * (1 - r) + 0.72 * r * arm;
-      let cb = 0.85 * disc + 0.78 * arm * (1 - r) + 1.02 * r * arm;
-      cr = cr * bright + 1.18 * core;
-      cg = cg * bright + 0.96 * core;
-      cb = cb * bright + 0.74 * core;
+      // Palette: magenta arms, a violet-blue second system, a cyan fringe
+      // at the arms' outer edge, a faint violet disc, gold-white core.
+      let cr = 1.18 * bright + 0.35 * bright2 + 0.036 * disc + 1.18 * core + 1.05 * bar + 0.26 * fringe;
+      let cg = 0.16 * bright + 0.3 * bright2 + 0.017 * disc + 0.96 * core + 0.78 * bar + 0.91 * fringe;
+      let cb = 0.95 * bright + 0.85 * bright2 + 0.1 * disc + 0.74 * core + 0.45 * bar + 1.3 * fringe;
+
+      // The skirt below the centre shades down, so the rim reads as an edge.
+      if (vv > 0) {
+        const skirt = 1 - 0.3 * sstep(0.02, 0.22, vv);
+        cr *= skirt;
+        cg *= skirt;
+        cb *= skirt;
+      }
 
       // Star sparkles embedded in the galaxy, on a hashed grid.
       const cs = 7;
       const gx = Math.floor(x / cs);
       const gy = Math.floor(y / cs);
       const h1 = hashI(gx, gy);
-      if (h1 > 0.9) {
+      if (h1 > 0.84) {
         const sx = gx * cs + hashI(gx + 91, gy) * cs;
         const sy = gy * cs + hashI(gx, gy + 57) * cs;
         const ddx = x - sx;
         const ddy = y - sy;
-        const sp = Math.exp(-(ddx * ddx + ddy * ddy) / 2.4) * (0.35 + bright);
+        const sp = Math.exp(-(ddx * ddx + ddy * ddy) / 2.4) * (0.3 + arm * 1.8);
         cr += 0.95 * sp;
         cg += 0.98 * sp;
         cb += 1.12 * sp;
@@ -279,19 +303,19 @@ function paintGalaxy(): void {
 
       const m = mask * 0.96;
       addTo(img, x, y, cr * m, cg * m, cb * m);
-      addTo(glow, x, y, cr * m * 0.22, cg * m * 0.22, cb * m * 0.22);
+      addTo(glow, x, y, cr * m * 0.1, cg * m * 0.1, cb * m * 0.1);
 
       // Fresnel rim: bright where the dome curves away, cyan melting to
       // gold on the upper right where the light catches it.
-      const fres = sstep(0.6, 0.995, r);
+      const fres = sstep(0.88, 0.995, r);
       if (fres > 0.002) {
-        const goldMix = sstep(-0.5, 0.95, uu * 0.72 - vv * 0.7);
+        const goldMix = sstep(0.05, 1.05, uu * 0.72 - vv * 0.7);
         const rr = lerp(0.35, 1.12, goldMix);
         const rg = lerp(0.92, 0.8, goldMix);
         const rb = lerp(1.05, 0.38, goldMix);
         const f = fres * mask;
-        addTo(img, x, y, rr * f * 1.35, rg * f * 1.35, rb * f * 1.35);
-        addTo(glow, x, y, rr * f * 0.55, rg * f * 0.55, rb * f * 0.55);
+        addTo(img, x, y, rr * f * 1.0, rg * f * 1.0, rb * f * 1.0);
+        addTo(glow, x, y, rr * f * 0.4, rg * f * 0.4, rb * f * 0.4);
       }
     }
   }
@@ -301,17 +325,17 @@ function paintOrgans(): void {
   // Glowing guts hanging in the bell: rose and gold, soft as lanterns.
   const blobs: Array<[number, number, number, number, number, number, number]> = [
     // dx, dy (bell units), radius px, r, g, b, strength
-    [-0.32, 0.0, 44, 1.08, 0.4, 0.52, 0.55],
-    [-0.09, 0.1, 58, 1.12, 0.66, 0.3, 0.6],
-    [0.15, 0.02, 50, 1.05, 0.42, 0.58, 0.55],
-    [0.37, 0.1, 36, 1.1, 0.7, 0.32, 0.5],
-    [0.02, -0.16, 32, 1.05, 0.5, 0.72, 0.45],
+    [-0.32, 0.0, 38, 1.08, 0.4, 0.52, 0.36],
+    [-0.09, 0.1, 48, 1.12, 0.66, 0.3, 0.4],
+    [0.15, 0.02, 42, 1.05, 0.42, 0.58, 0.36],
+    [0.37, 0.1, 30, 1.1, 0.7, 0.32, 0.33],
+    [0.02, -0.16, 27, 1.05, 0.5, 0.72, 0.3],
   ];
   for (const [du, dv, rad, r, g, b, s] of blobs) {
     const x = BCX + du * BR;
     const y = BCY + dv * BR * 0.94;
     stamp(img, x, y, rad, r, g, b, s);
-    stamp(glow, x, y, rad * 1.7, r, g, b, s * 0.4);
+    stamp(glow, x, y, rad * 1.7, r, g, b, s * 0.25);
   }
 }
 
@@ -331,7 +355,7 @@ function ribbon(
   tip: [number, number, number],
   bright: number,
 ): void {
-  const steps = Math.ceil(len / 2);
+  const steps = Math.ceil(len / 1.2);
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
     const yy = t * len;
@@ -343,21 +367,21 @@ function ribbon(
     const cr = lerp(top[0], tip[0], t) * bright * pulse;
     const cg = lerp(top[1], tip[1], t) * bright * pulse;
     const cb = lerp(top[2], tip[2], t) * bright * pulse;
-    stamp(glow, x, y, wdt * 2.7, cr, cg, cb, 0.3);
-    stamp(img, x, y, Math.max(0.8, wdt), cr, cg, cb, 0.8);
+    stamp(glow, x, y, wdt * 2.7, cr, cg, cb, 0.17);
+    stamp(img, x, y, Math.max(1.0, wdt), cr, cg, cb, 1.0);
   }
 }
 
 function paintTentacles(): void {
-  const cyan: [number, number, number] = [0.38, 0.94, 1.05];
-  const magenta: [number, number, number] = [1.02, 0.38, 0.9];
+  const cyan: [number, number, number] = [0.3, 0.92, 1.08];
+  const magenta: [number, number, number] = [1.08, 0.32, 0.92];
   const R = rng(777);
   // Four long hero tentacles sweep far down-left: the momentum lines.
   for (let i = 0; i < 4; i++) {
     const t = -0.55 + i * 0.34 + R() * 0.1;
     const sx = BCX + t * BR * 0.98;
     const sy = BCY + rimV(t) * BR * 0.94 + 4;
-    ribbon(sx, sy, 470 + R() * 130, 7.5, R() * 6.28, 0.011 + R() * 0.004, 15 + R() * 9, 130 + R() * 50, 0, cyan, magenta, 1.25);
+    ribbon(sx, sy, 470 + R() * 130, 7.5, R() * 6.28, 0.011 + R() * 0.004, 15 + R() * 9, 165 + R() * 65, 0, cyan, magenta, 1.15);
   }
   // The main veil of tentacles along the rim.
   for (let i = 0; i < 30; i++) {
@@ -373,11 +397,11 @@ function paintTentacles(): void {
       R() * 6.28,
       0.012 + R() * 0.013,
       8 + R() * 17,
-      26 + R() * 66,
+      34 + R() * 70,
       0,
       cyan,
       magenta,
-      0.85 + R() * 0.35,
+      0.62 + R() * 0.3,
     );
   }
   // Thick frilled oral arms at the centre, rose melting to violet.
@@ -393,9 +417,9 @@ function paintTentacles(): void {
       7 + R() * 6,
       22 + R() * 26,
       0.5,
-      [1.06, 0.42, 0.6],
-      [0.82, 0.32, 0.98],
-      0.8,
+      [1.08, 0.36, 0.55],
+      [0.85, 0.3, 1.0],
+      0.62,
     );
   }
 }
@@ -407,14 +431,14 @@ function paintParticles(): void {
     [1.02, 0.42, 0.9],
     [1.1, 0.78, 0.4],
   ];
-  for (let i = 0; i < 250; i++) {
+  for (let i = 0; i < 210; i++) {
     const x = BCX + (R() - 0.64) * 600;
     const y = BCY - 30 + R() * 580;
     const size = 0.8 + R() * 2.3;
     const col = palette[Math.floor(R() * 3)];
     const s = 0.4 + R() * 0.85;
     stamp(img, x, y, size * 1.6, col[0], col[1], col[2], s);
-    stamp(glow, x, y, size * 4.2, col[0], col[1], col[2], s * 0.32);
+    stamp(glow, x, y, size * 3.2, col[0], col[1], col[2], s * 0.22);
   }
   // Sparks shedding off the rim.
   for (let i = 0; i < 80; i++) {
@@ -520,7 +544,7 @@ function compositeGlow(): void {
           const xx = Math.min(SW - 1, Math.max(0, x0 + ox));
           const wx = ox === 0 ? 1 - tx : tx;
           const i = (yy * SW + xx) * 3;
-          const w = wx * wy * S * S; // undo the box average: energy back
+          const w = wx * wy;
           r += small[i] * w;
           g += small[i + 1] * w;
           b += small[i + 2] * w;
@@ -634,12 +658,11 @@ function chunk(type: string, data: Buffer): Buffer {
 function encodePNG(rgb: Uint8Array): Buffer {
   const stride = W * 3;
   const raw = Buffer.alloc(H * (stride + 1));
-  const rowBuf = Buffer.alloc(stride);
   const filt = Buffer.alloc(stride);
-  let prev: Buffer | null = null;
+  let prev = Buffer.alloc(stride); // the row above; zeros for the first row
   let pos = 0;
   for (let y = 0; y < H; y++) {
-    rowBuf.set(rgb.subarray(y * stride, (y + 1) * stride));
+    const cur = Buffer.from(rgb.subarray(y * stride, (y + 1) * stride));
     // Pick the filter with the least absolute signed-byte energy.
     let bestType = 0;
     let bestScore = Infinity;
@@ -647,24 +670,25 @@ function encodePNG(rgb: Uint8Array): Buffer {
     for (let type = 0; type <= 4; type++) {
       let score = 0;
       for (let i = 0; i < stride; i++) {
-        const a = i >= 3 ? rowBuf[i - 3] : 0;
-        const b = prev ? prev[i] : 0;
-        const c = prev && i >= 3 ? prev[i - 3] : 0;
+        const a = i >= 3 ? cur[i - 3] : 0;
+        const b = prev[i];
+        const c = i >= 3 ? prev[i - 3] : 0;
         let v: number;
-        if (type === 0) v = rowBuf[i];
-        else if (type === 1) v = rowBuf[i] - a;
-        else if (type === 2) v = rowBuf[i] - b;
-        else if (type === 3) v = rowBuf[i] - ((a + b) >> 1);
+        if (type === 0) v = cur[i];
+        else if (type === 1) v = cur[i] - a;
+        else if (type === 2) v = cur[i] - b;
+        else if (type === 3) v = cur[i] - ((a + b) >> 1);
         else {
           const p = a + b - c;
           const pa = Math.abs(p - a);
           const pb = Math.abs(p - b);
           const pc = Math.abs(p - c);
           const pred = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-          v = rowBuf[i] - pred;
+          v = cur[i] - pred;
         }
-        filt[i] = v & 0xff;
-        score += Math.abs(v & 0x80 ? v - 256 : v);
+        const fb = v & 0xff;
+        filt[i] = fb;
+        score += Math.abs(fb < 128 ? fb : fb - 256);
       }
       if (score < bestScore) {
         bestScore = score;
@@ -675,7 +699,7 @@ function encodePNG(rgb: Uint8Array): Buffer {
     raw[pos++] = bestType;
     (bestRow as Buffer).copy(raw, pos);
     pos += stride;
-    prev = rowBuf;
+    prev = cur;
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(W, 0);
@@ -712,8 +736,8 @@ function render(): Buffer {
   // Tonemap: soft exponential shoulder, gentle gamma lift, quantise.
   const rgb = new Uint8Array(W * H * 3);
   for (let i = 0; i < W * H * 3; i++) {
-    let v = 1 - Math.exp(-img[i] * 1.3);
-    v = Math.pow(v, 0.82);
+    let v = 1 - Math.exp(-img[i] * 1.28);
+    v = Math.pow(v, 0.88);
     rgb[i] = Math.round(clamp01(v) * 255);
   }
   return encodePNG(rgb);
